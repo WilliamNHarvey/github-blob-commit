@@ -40,16 +40,15 @@ function githubBlobCommit (options) {
 
 /**
  * @param  {Array}   files    {Object} {path[, content]}
- * @param  {String|Buffer}   data
- * @param  {Object}   [options] `options.encoding='utf8'` `options.flag='w'`
- * default will overwrite, `'wx'` will fail if path exists. `options.message` Commit message. `options.branch='master'` branch to write to.
+ * @param  {String}   branch
  * @param  {Function} callback
+ * @param  {String}   message (optional)
  * @example
  * gh.commitFiles(files, 'github_repo_branch', function() {
  *   console.log('Committed')
  * })
  */
-githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, callback) {
+githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, callback, message) {
   errs = "";
   if (typeof files !== 'object') {
     errs += "Need files array\n"
@@ -59,6 +58,9 @@ githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, ca
   }
   if (typeof callback !== 'function') {
     errs += "Need a callback\n"
+  }
+  if (typeof message !== 'string') {
+    message = 'Added following files:';
   }
   if (errs.length) {
     throw new Error(errs)
@@ -87,7 +89,7 @@ githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, ca
   }
 
   Promise.all(blobPromises).then(function(values) {
-    _this._commit.call(_this, hashed, branch, callback);
+    _this._commit.call(_this, hashed, branch, message, callback);
   });
 }
 
@@ -124,7 +126,7 @@ githubBlobCommit.prototype._createBlob = function _createBlob (params, callback)
  * @param  {String}   branch   Branch to commit to
  * @param  {Function} callback Called with ref to new head
  */
-githubBlobCommit.prototype._commit = function (files, branch, callback) {
+githubBlobCommit.prototype._commit = function (files, branch, message, callback) {
   var _repo = this._repo
   async.waterfall([
     _repo.git.refs('heads/' + branch).fetch,
@@ -155,8 +157,8 @@ githubBlobCommit.prototype._commit = function (files, branch, callback) {
         tree: treeSha,
         parents: [ commitSha ],
         message: files.reduce(function (prev, curr) {
-          return prev + curr.path + ': ' + (curr.message || '') + '\n'
-        }, 'Added new files\n\n')
+          return prev + curr.path + (': ' + curr.message || '') + '\n'
+        }, message+'\n\n')
       }
       _repo.git.commits.create(newCommit, cb)
     },
