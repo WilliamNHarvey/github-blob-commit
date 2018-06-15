@@ -157,7 +157,7 @@ githubBlobCommit.prototype._commit = function (files, branch, message, callback)
         tree: treeSha,
         parents: [ commitSha ],
         message: files.reduce(function (prev, curr) {
-          return prev + curr.path + (': ' + curr.message || '') + '\n'
+          return prev + curr.path + (curr.message ? ': ' + curr.message : '') + '\n'
         }, message+'\n\n')
       }
       _repo.git.commits.create(newCommit, cb)
