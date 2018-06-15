@@ -3,57 +3,13 @@ var async = require('async')
 var Octokat = require('octokat')
 var fs = require('file-system')
 
-/**
- * A mixin for [Octokat.js](https://github.com/philschatz/octokat.js) that
- * provides a simple wrapper for writing to and reading from a repo. It
- * replicates node.js `fs.readFile` and `fs.writeFile`. It has a few special
- * features:
- *
- * 1. **Minimize requests**
- *
- *     By default it tries to use the Github [contents
- * API](https://developer.github.com/v3/repos/contents/) to read, write with a
- * single request and update a file with 3 requests: (a) tries to write; (b)
- * gets sha for existing file; (c) writes update
- *
- * 2. **Read and update large files**
- *
- *     The contents API cannot read or update files larger than 1Mb. Hubfs
- * switches to the [git API](https://developer.github.com/v3/git/) to read and
- * update files up to 100Mb
- *
- * 3. **Simultaneous writes**
- *
- *     Repeatedly writing to the contents API [will result in an
- * error](http://stackoverflow.com/questions/19576601/github-api-issue-with-file-upload)
- * because of delays updating the HEAD, and making multiple simultaneous
- * writes will result in the same problem of Fast Forward commits. Hubfs will
- * automatically queue up requests and switch to using the git API for
- * multiple parallel writes. It will batch together multiple writes to the
- * same repo in commits of up to 10 files, but will make commits as quickly as
- * it can.
- *
- * **Limitations**
- *
- * - Repeat writes do not currently respect `options.flags='wx'` (they will
- * overwrite existing files)
- *
- * - Maximum batch size for commits cannot be changed, awaiting [upstream
- * async issue](https://github.com/caolan/async/pull/740)
- *
- * ### Breaking change in v1.0.0
- *
- * No longer operates as a Octokat mixin, instead new instances are created
- * with an `options` object with the owner, repo and auth, which is passed
- * to Octokat.
- *
+/*
  * @param  {Object} options `options.owner` Github repo owner, `options.repo`
  * repo name, `options.auth` (optional) passed through to a new
  * [Octokat instance](https://github.com/philschatz/octokat.js#in-a-browser)
- * @return {Object}      returns and instance of Hubfs with two methods
- * `readFile` and `writeFile`.
+ * @return {Object}      returns and instance of githubBlobCommit with commitFiles
  * @example
- * var Hubfs = require('Hubfs')
+ * var githubBlobCommit = require('github-blob-commit')
  *
  * var options = {
  *   owner: 'github_username',
@@ -61,10 +17,11 @@ var fs = require('file-system')
  *   auth: {
  *     username: "USER_NAME",
  *     password: "PASSWORD"
+ *     // Or token: "TOKEN"
  *   }
  * }
  *
- * var gh = Hubfs(options)
+ * var gh = githubBlobCommit(options)
  */
 function githubBlobCommit (options) {
   if (!(this instanceof githubBlobCommit)) {
@@ -88,14 +45,13 @@ function githubBlobCommit (options) {
  * default will overwrite, `'wx'` will fail if path exists. `options.message` Commit message. `options.branch='master'` branch to write to.
  * @param  {Function} callback
  * @example
- * gh.writeFile('message.txt', 'Hello Github', function (err) {
- *   if (err) throw err
- *   console.log('It\'s saved!')
+ * gh.commitFiles(files, 'github_repo_branch', function() {
+ *   console.log('Committed')
  * })
  */
 githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, callback) {
   errs = "";
-  if (typeof files !== 'array') {
+  if (typeof files !== 'object') {
     errs += "Need files array\n"
   }
   if (typeof branch !== 'string') {
@@ -107,23 +63,31 @@ githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, ca
   if (errs.length) {
     throw new Error(errs)
   }
-
+  var _this = this;
   hashed = [];
-  for (var file in files) {
-    if(file.content) {
-      var contentBuffer = new Buffer(file.content, "utf8");
+  blobPromises = [];
+  for(var i = 0; i < files.length; i++) {
+    if(files[i].content) {
+      var contentBuffer = new Buffer(files[i].content, "utf8");
     }
     else {
-      var contentBuffer = new Buffer(fs.readFileSync(__dirname+"/../../"+file, "utf8"), "utf8");
+      var contentBuffer = new Buffer(fs.readFileSync(__dirname+"/../../"+files[i].path, "utf8"), "utf8");
     }
-    fileBlob = this._createBlob.call({
-      path: "schemas/docs/"+file,
-      content: contentBuffer.toString('base64')
-    };
-    hashed.push(fileBlob);
+
+    blobPromises.push(new Promise(resolve => {
+      fileBlob = _this._createBlob.call(_this, {
+        path: "schemas/docs/"+files[i].path,
+        content: contentBuffer.toString('base64')
+      }, function(hashedFile) {
+        hashed.push(hashedFile);
+        resolve();
+      });
+    }));
   }
 
-  this._commit.call(hashed, branch, callback)
+  Promise.all(blobPromises).then(function(values) {
+    _this._commit.call(_this, hashed, branch, callback);
+  });
 }
 
 /**
@@ -146,7 +110,7 @@ githubBlobCommit.prototype._createBlob = function _createBlob (params, callback)
   this._repo.git.blobs.create(input, function (err, response) {
     if (err) return callback(err)
     file.sha = response.sha
-    callback(null, file)
+    callback(file)
   })
 }
 

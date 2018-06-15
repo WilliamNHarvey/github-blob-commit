@@ -18,7 +18,7 @@ Uses [Octokat.js](https://github.com/philschatz/octokat.js)
 ### Example
 
 ```js
-var githubBlobCommit = require('githubBlobCommit')
+var githubBlobCommit = require('github-blob-commit')
 
 var options = {
   owner: 'github_username',
