@@ -66,6 +66,7 @@ githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, ca
   var _this = this;
   hashed = [];
   blobPromises = [];
+
   for(var i = 0; i < files.length; i++) {
     if(files[i].content) {
       var contentBuffer = new Buffer(files[i].content, "utf8");
@@ -76,7 +77,7 @@ githubBlobCommit.prototype.commitFiles = function commitFiles (files, branch, ca
 
     blobPromises.push(new Promise(resolve => {
       fileBlob = _this._createBlob.call(_this, {
-        path: "schemas/docs/"+files[i].path,
+        path: files[i].path,
         content: contentBuffer.toString('base64')
       }, function(hashedFile) {
         hashed.push(hashedFile);
