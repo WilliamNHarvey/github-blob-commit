@@ -1,4 +1,4 @@
-# githubBlobCommit
+# github-blob-commit
 
 Single commit for multiple files
 
@@ -51,6 +51,6 @@ fs.readdir("/files/", (err, files) => {
 ## Installation
 
 ```sh
-$ npm install --save githubBlobCommit
+$ npm install --save github-blob-commit
 ```
 
