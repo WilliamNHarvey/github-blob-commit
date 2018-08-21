@@ -1,4 +1,5 @@
 # github-blob-commit
+https://www.npmjs.com/package/github-blob-commit
 
 Single commit for multiple files
 
